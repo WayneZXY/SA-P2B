@@ -1,4 +1,5 @@
-git+git://github.com/erikwijmans/etw_pytorch_utils.git@v1.1.1#egg=etw_pytorch_utils
+# git+git://github.com/erikwijmans/etw_pytorch_utils.git@v1.1.1#egg=etw_pytorch_utils
+git+git://github.com/peter0749/etw_pytorch_utils.git
 h5py
 numpy
 torch>=1.0

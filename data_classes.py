@@ -154,7 +154,7 @@ class Box:
         self.name = name
 
     def __eq__(self, other):
-        center = np.allclose(self.center, other.center)
+        center = np.allclose(self.center, other.center)  # numpy的allclose方法，比较两个array是不是每一元素都相等，默认在1e-05的误差范围内
         wlh = np.allclose(self.wlh, other.wlh)
         orientation = np.allclose(self.orientation.elements, other.orientation.elements)
         label = (self.label == other.label) or (np.isnan(self.label) and np.isnan(other.label))
@@ -185,7 +185,7 @@ class Box:
     def decode(cls, data):
         """
         Instantiates a Box instance from encoded vector representation.
-        :param data: [<float>: 16]. Output from encode.
+        :param data: [<float>: 16]. Output from encode, a list.
         :return: <Box>.
         """
         return Box(data[0:3], data[3:6], Quaternion(data[6:10]), label=data[10], score=data[11], velocity=data[12:15],
@@ -218,10 +218,10 @@ class Box:
         self.velocity = np.dot(quaternion.rotation_matrix, self.velocity)
 
     def transform(self, transf_matrix):
-        transformed = np.dot(transf_matrix[0:3,0:4].T, self.center)
-        self.center = transformed[0:3]/transformed[3]
-        self.orientation = self.orientation* Quaternion(matrix = transf_matrix[0:3,0:3])
-        self.velocity = np.dot(transf_matrix[0:3,0:3], self.velocity)
+        transformed = np.dot(transf_matrix[0: 3,0: 4].T, self.center)
+        self.center = transformed[0: 3]/transformed[3]
+        self.orientation = self.orientation * Quaternion(matrix=transf_matrix[0: 3,0: 3])
+        self.velocity = np.dot(transf_matrix[0: 3,0: 3], self.velocity)
 
     def corners(self, wlh_factor=1.0):
         """

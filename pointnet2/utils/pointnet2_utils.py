@@ -42,10 +42,10 @@ class RandomDropout(nn.Module):
         return pt_utils.feature_dropout_no_scaling(X, theta, self.train, self.inplace)
 
 
-class FurthestPointSampling(Function):
+class FurthestPointSampling(Function):  # 最远点采样
     @staticmethod
     def forward(ctx, xyz, npoint):
-        # type: (Any, torch.Tensor, int) -> torch.Tensor
+        # type: (any, torch.Tensor, int) -> torch.Tensor
         r"""
         Uses iterative furthest point sampling to select a set of npoint features that have the largest
         minimum distance
@@ -65,17 +65,18 @@ class FurthestPointSampling(Function):
         return _ext.furthest_point_sampling(xyz, npoint)
 
     @staticmethod
-    def backward(xyz, a=None):
+    # def backward(xyz, a=None):
+    def backward(ctx, xyz, a=None):
         return None, None
 
 
 furthest_point_sample = FurthestPointSampling.apply
 
 
-class GatherOperation(Function):
+class GatherOperation(Function):  # 聚合操作
     @staticmethod
     def forward(ctx, features, idx):
-        # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
+        # type: (any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
 
         Parameters
@@ -94,14 +95,14 @@ class GatherOperation(Function):
 
         _, C, N = features.size()
 
-        ctx.for_backwards = (idx, C, N)
-
+        # ctx.for_backwards = (idx, C, N)
+        ctx.save_for_backwards = (idx, C, N)
         return _ext.gather_points(features, idx)
 
     @staticmethod
     def backward(ctx, grad_out):
-        idx, C, N = ctx.for_backwards
-
+        # idx, C, N = ctx.for_backwards
+        idx, C, N = ctx.saved_tensors
         grad_features = _ext.gather_points_grad(grad_out.contiguous(), idx, N)
         return grad_features, None
 
@@ -111,8 +112,9 @@ gather_operation = GatherOperation.apply
 
 class ThreeNN(Function):
     @staticmethod
+    # def forward(ctx, unknown, known) -> tuple[torch.Tensor, torch.Tensor]:
     def forward(ctx, unknown, known):
-        # type: (Any, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
+        # type: (any, torch.Tensor, torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]
         r"""
             Find the three nearest neighbors of unknown in known
         Parameters
@@ -129,7 +131,7 @@ class ThreeNN(Function):
         idx : torch.Tensor
             (B, n, 3) index of 3 nearest neighbors
         """
-        dist2, idx = _ext.three_nn(unknown, known)
+        dist2, idx = _ext. three_nn(unknown, known)
 
         return torch.sqrt(dist2), idx
 
@@ -162,15 +164,15 @@ class ThreeInterpolate(Function):
             (B, c, n) tensor of the interpolated features
         """
         B, c, m = features.size()
-        n = idx.size(1)
+        # n = idx.size(1)
 
-        ctx.three_interpolate_for_backward = (idx, weight, m)
-
+        # ctx.three_interpolate_for_backward = (idx, weight, m)
+        ctx.save_for_backward(idx, weight, m)
         return _ext.three_interpolate(features, idx, weight)
 
     @staticmethod
     def backward(ctx, grad_out):
-        # type: (Any, torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        # type: (any, torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         r"""
         Parameters
         ----------
@@ -186,13 +188,15 @@ class ThreeInterpolate(Function):
 
         None
         """
-        idx, weight, m = ctx.three_interpolate_for_backward
+        # idx, weight, m = ctx.three_interpolate_for_backward
+        idx, weight, m = ctx.saved_tensors
 
         grad_features = _ext.three_interpolate_grad(
             grad_out.contiguous(), idx, weight, m
         )
 
-        return grad_features, None, None
+        # return grad_features, None, None
+        return grad_features, torch.zeros_like(idx), torch.zeros_like(weight)
 
 
 three_interpolate = ThreeInterpolate.apply
@@ -201,7 +205,7 @@ three_interpolate = ThreeInterpolate.apply
 class GroupingOperation(Function):
     @staticmethod
     def forward(ctx, features, idx):
-        # type: (Any, torch.Tensor, torch.Tensor) -> torch.Tensor
+        # type: (any, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
 
         Parameters
@@ -219,13 +223,14 @@ class GroupingOperation(Function):
         B, nfeatures, nsample = idx.size()
         _, C, N = features.size()
 
-        ctx.for_backwards = (idx, N)
+        # ctx.for_backwards = (idx, N)
+        ctx.save_for_backwards = (idx, N)
 
         return _ext.group_points(features, idx)
 
     @staticmethod
     def backward(ctx, grad_out):
-        # type: (Any, torch.tensor) -> Tuple[torch.Tensor, torch.Tensor]
+        # type: (any, torch.tensor) -> tuple[torch.Tensor, torch.Tensor]
         r"""
 
         Parameters
@@ -239,11 +244,12 @@ class GroupingOperation(Function):
             (B, C, N) gradient of the features
         None
         """
-        idx, N = ctx.for_backwards
-
+        # idx, N = ctx.saved_tensors.for_backwards
+        idx, N = ctx.saved_tensors
         grad_features = _ext.group_points_grad(grad_out.contiguous(), idx, N)
 
-        return grad_features, None
+        # return grad_features, None
+        return grad_features, torch.zeros_like(idx)
 
 
 grouping_operation = GroupingOperation.apply
@@ -252,7 +258,7 @@ grouping_operation = GroupingOperation.apply
 class BallQuery(Function):
     @staticmethod
     def forward(ctx, radius, nsample, xyz, new_xyz):
-        # type: (Any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
+        # type: (any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
         r"""
 
         Parameters
@@ -283,7 +289,7 @@ ball_query = BallQuery.apply
 class BallQuery_score(Function):
     @staticmethod
     def forward(ctx, radius, nsample, xyz, new_xyz, score):
-        # type: (Any, float, int, torch.Tensor, torch.Tensor) -> torch.Tensor
+        # type: (any, float, int, torch.Tensor, torch.Tensor, float) -> torch.Tensor
         r"""
 
         Parameters
@@ -330,7 +336,7 @@ class QueryAndGroup(nn.Module):
         self.radius, self.nsample, self.use_xyz = radius, nsample, use_xyz
 
     def forward(self, xyz, new_xyz, features=None):
-        # type: (QueryAndGroup, torch.Tensor. torch.Tensor, torch.Tensor) -> Tuple[Torch.Tensor]
+        # type: (QueryAndGroup, torch.Tensor. torch.Tensor, torch.Tensor) -> tuple[torch.Tensor]
         r"""
         Parameters
         ----------
@@ -347,17 +353,18 @@ class QueryAndGroup(nn.Module):
             (B, 3 + C, npoint, nsample) tensor
         """
 
-        idx = ball_query(self.radius, self.nsample, xyz, new_xyz)
-        xyz_trans = xyz.transpose(1, 2).contiguous()
+        idx = ball_query(self.radius, self.nsample, xyz, new_xyz)  # 球查询，C++实现
+        xyz_trans = xyz.transpose(1, 2).contiguous()  # (B, 3, N)
         grouped_xyz = grouping_operation(xyz_trans, idx)  # (B, 3, npoint, nsample)
         grouped_xyz -= new_xyz.transpose(1, 2).unsqueeze(-1)
+        # 减去质心(B, 3, npoint, 1), 仍然是(B, 3, npoint, nsample)
 
         if features is not None:
-            grouped_features = grouping_operation(features, idx)
+            grouped_features = grouping_operation(features, idx) # (B, C, npoint, nsample)
             if self.use_xyz:
                 new_features = torch.cat(
                     [grouped_xyz, grouped_features], dim=1
-                )  # (B, C + 3, npoint, nsample)
+                )  # (B, 3 + C, npoint, nsample)
             else:
                 new_features = grouped_features
         else:
@@ -381,12 +388,12 @@ class QueryAndGroup_score(nn.Module):
     """
 
     def __init__(self, radius, nsample, use_xyz=True):
-        # type: (QueryAndGroup, float, int, bool) -> None
+        # type: (QueryAndGroup_score, float, int, bool) -> None
         super(QueryAndGroup_score, self).__init__()
         self.radius, self.nsample, self.use_xyz = radius, nsample, use_xyz
 
-    def forward(self, xyz, new_xyz,score, features=None):
-        # type: (QueryAndGroup, torch.Tensor. torch.Tensor, torch.Tensor) -> Tuple[Torch.Tensor]
+    def forward(self, xyz, new_xyz, score, features=None):
+        # type: (QueryAndGroup_score, torch.Tensor. torch.Tensor, torch.Tensor, torch.Tensor) -> tuple[torch.Tensor]
         r"""
         Parameters
         ----------
@@ -455,7 +462,7 @@ class GroupAll(nn.Module):
         self.use_xyz = use_xyz
 
     def forward(self, xyz, new_xyz, features=None):
-        # type: (GroupAll, torch.Tensor, torch.Tensor, torch.Tensor) -> Tuple[torch.Tensor]
+        # type: (GroupAll, torch.Tensor, torch.Tensor, torch.Tensor) -> tuple[torch.Tensor]
         r"""
         Parameters
         ----------

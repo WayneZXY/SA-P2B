@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../SA-SSD-master"
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true,
+		"editor.fontSize": 21,
+		"files.autoSave": "afterDelay"
+	}
+}
