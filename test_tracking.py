@@ -29,7 +29,7 @@ def test(loader,
         epoch=-1,
         shape_aggregation=" ",
         reference_BB=" ",
-        model_fusion="pointcloud",
+        # model_fusion="pointcloud",
         max_iter=-1,
         IoU_Space=3):
 
@@ -89,7 +89,7 @@ def test(loader,
                                         offset=dataset.offset_BB,
                                         scale=dataset.scale_BB)
                         
-                        candidate_PCs, _, candidate_reg = utils.regularizePCwithlabel(
+                        candidate_PCs, _, candidate_reg, _, _ = utils.regularizePCwithlabel(
                                         candidate_PC,
                                         candidate_label,
                                         candidate_reg,
@@ -110,8 +110,8 @@ def test(loader,
                         else:
                             model_PC = utils.getModel(PCs[:i], results_BBs, offset=dataset.offset_BB, scale=dataset.scale_BB)
 
-                        model_PC_torch = utils.regularizePC(model_PC, dataset.input_size, istrain=False).unsqueeze(0)
-                        model_PC_torch = model_PC_torch.requires_grad_(False).cuda()
+                        model_PC_torch = utils.regularizePC(model_PC, dataset.input_size, istrain=False).unsqueeze(0).cuda()
+                        model_PC_torch = model_PC_torch.requires_grad_(False)
                         candidate_PCs_torch.requires_grad_(False)
                         # model_PC_torch = Variable(model_PC_torch, requires_grad=False).cuda()
                         # candidate_PCs_torch = Variable(candidate_PCs_torch, requires_grad=False).cuda()
@@ -172,8 +172,8 @@ if __name__ == '__main__':
     parser.add_argument('--IoU_Space',required=False,type=int,default=3,help='IoUBEV vs IoUBox (2 vs 3)')
     args = parser.parse_args()
     print(args)
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1,2'
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1'
 
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%Y/%m/%d %H:%M:%S', \
                     filename=os.path.join(args.save_root_dir, datetime.now().strftime('%Y-%m-%d %H-%M-%S.log')), level=logging.INFO)
@@ -183,12 +183,14 @@ if __name__ == '__main__':
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
 
-    netR = Pointnet_Tracking(input_channels=0, use_xyz=True)
+    netR = Pointnet_Tracking(input_channels=0, use_xyz=True, test=True).cuda()
     if args.ngpu > 1:
         netR = torch.nn.DataParallel(netR, range(args.ngpu))
+        # torch.distributed.init_process_group(backend="nccl")
+        # netR = torch.nn.DistributedDataParallel(netR) 
     if args.model != '':
         netR.load_state_dict(torch.load(os.path.join(args.save_root_dir, args.model)))    
-    netR.cuda()
+    # netR.cuda()
     print(netR)
     torch.cuda.synchronize()
     # Car/Pedestrian/Van/Cyclist
@@ -223,7 +225,7 @@ if __name__ == '__main__':
             epoch=epoch + 1,
             shape_aggregation=args.shape_aggregation,
             reference_BB=args.reference_BB,
-            model_fusion=args.model_fusion,
+            # model_fusion=args.model_fusion,
             IoU_Space=args.IoU_Space)
 
         Success_run.update(Succ)

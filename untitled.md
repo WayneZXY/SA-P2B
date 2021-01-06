@@ -15,7 +15,7 @@
 
 ## ==TODO==
 
-- [ ] 首先实现主体功能
+- [x] 首先实现主体功能
   ~~- [ ]  *pointnet_tracking.py*第186行，要输出l_xyz和l_features完整列表，作为*pointnet_modules.py*的第275行的known和known_feats~~
   - [x]  是否在PointnetFPModule里面加入mlp对提取出的new_features进行处理：
             2020.12.25根据pointnet++原文决定需要加入
@@ -62,3 +62,14 @@
 2020.12.28
 完成了逐点分割标签和偏移标签的生成
 对应kitty_utils.py的regularizePCwithlabel函数中的sample_seg_label和sample_seg_offset
+基本完成了训练部分的所有代码
+后续任务是确定可视化的内容和实现方法
+
+2020.12.29
+open3d 可
+
+2021.1.4
+正式跑通训练程序，开训！
+
+2021.1.5
+12轮, Succ=56.8, Prec=72.8, 哟西

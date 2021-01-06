@@ -188,7 +188,7 @@ class Pointnet_Tracking(nn.Module):
     r"""
         xorr the search and the template
     """
-    def __init__(self, input_channels=3, use_xyz=True, objective = False, test = False):
+    def __init__(self, input_channels=3, use_xyz=True, test=False):
         super(Pointnet_Tracking, self).__init__()
         self.test = test
         self.backbone_net = Pointnet_Backbone(input_channels, use_xyz)
@@ -206,7 +206,7 @@ class Pointnet_Tracking(nn.Module):
         )
         self.aux_modules.append(
             PointnetFPModule(
-                mlp=[384, 256] 
+                mlp=[256, 256] 
             )
         )
 
@@ -366,9 +366,9 @@ class Pointnet_Tracking(nn.Module):
                 # .conv1d(256, bn=True)
                 # .conv1d(1, activation=None)
         # )
-        self.aux_seg = nn.Linear(64, 1, bias=False)
-        self.aux_offset = nn.Linear(64, 3, bias=False)
-    @staticmethod
+        self.aux_seg = nn.Linear(256, 1, bias=False)
+        self.aux_offset = nn.Linear(256, 3, bias=False)
+    # @staticmethod
     def xcorr(self, x_label, x_object, template_xyz):       
         r'''
             x_label = search_feature
@@ -430,15 +430,17 @@ class Pointnet_Tracking(nn.Module):
         # B * 5 * self.num_proposal，C=5，坐标3维 + X-Y面旋转1维 + proposal-wise targetness得分1维
         estimation_boxs = torch.cat((proposal_offsets[:, 0: 3, :]+center_xyzs.transpose(1, 2).contiguous(), proposal_offsets[:, 3: 5, :]), dim=1)
         # B * 5 * self.num_proposal = B * 5 * 64
-        if self.test == False:  # 附加任务
-            search_feature_list.append(None)
+        if self.test == False:  # 附加任务只在训练时进行
+            search_feature_list.append(None)  # 最后一层的unknown_feats没有
+            new_feature = list(range(len(self.aux_modules)))
             for i in range(len(self.aux_modules)):
                 if i == 0:
-                    new_feature = self.aux_modules[i](search_xyz_list[i + 1], search_xyz_list[i], search_feature_list[i + 1], search_feature)
+                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], search_feature)
                 else:
-                    new_feature = self.aux_modules[i](search_xyz_list[i + 1], search_xyz_list[i], search_feature_list[i + 1], new_feature)
-            estimation_seg = self.aux_seg(new_feature)  # 分割得分，B * 1024
-            estimation_offset = self.aux_offset(new_feature)  # 偏移估计，B * 3 * 1024
-            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg, estimation_offset
+                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], new_feature[i - 1])
+            aux_feature = new_feature[-1].transpose(1, 2)
+            estimation_seg = self.aux_seg(aux_feature)  # 分割得分，B * 1024 * 1
+            estimation_offset = self.aux_offset(aux_feature)  # 偏移估计，B * 1024 * 3
+            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1), estimation_offset
         else:
             return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs

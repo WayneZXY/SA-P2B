@@ -3,6 +3,7 @@ from data_classes import PointCloud, Box
 from pyquaternion import Quaternion
 import numpy as np
 import pandas as pd
+import json 
 import os
 import torch
 from tqdm import tqdm
@@ -189,46 +190,59 @@ class SiameseTrain(SiameseDataset):
         self.sigma_Gaussian = sigma_Gaussian
         self.offset_BB = offset_BB
         self.scale_BB = scale_BB
-
+        self.saved_train_BBs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/train_data.list_of_BBs.npy'
+        self.saved_train_PCs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/train_data.list_of_PCs.npy'
+        self.saved_valid_BBs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/valid_data.list_of_BBs.npy'
+        self.saved_valid_PCs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/valid_data.list_of_PCs.npy'
+        # self.saved_model_PCs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/train_data.model_PC.npy'
+        # self.saved_annos_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/P2B/train_data.list_of_anno.npy'
         self.num_candidates_perframe = 4  # 每帧的候选目标数目？
 
         logging.info("preloading PC...")
         self.list_of_PCs = [None] * len(self.list_of_anno)
         # self.list_of_anno从SiameseDataset继承过来
         self.list_of_BBs = [None] * len(self.list_of_anno)
-        for index in tqdm(range(len(self.list_of_anno)), desc='all annotations'):
-            anno = self.list_of_anno[index]  # 获取标注
-            PC, box = self.getBBandPC(anno)  # 根据标注得到点云和边界盒
-            # 点云4维，边界盒17维（可参考dataset_class.Box.__repr__）
-            new_PC = utils.cropPC(PC, box, offset=10)  # 根据缩放和偏移后的边界盒裁切点云
+        if np.load(self.saved_train_PCs_dir, allow_pickle=True) is not None:
+            if self.split == 'Train':
+                self.list_of_PCs = np.load(self.saved_train_PCs_dir, allow_pickle=True).tolist()
+                self.list_of_BBs = np.load(self.saved_train_BBs_dir, allow_pickle=True).tolist()
+            else:
+                self.list_of_PCs = np.load(self.saved_valid_PCs_dir, allow_pickle=True).tolist()
+                self.list_of_BBs = np.load(self.saved_valid_BBs_dir, allow_pickle=True).tolist()          
+        else:
+            for index in tqdm(range(len(self.list_of_anno)), desc='all annotations'):
+                anno = self.list_of_anno[index]  # 获取标注
+                PC, box = self.getBBandPC(anno)  # 根据标注得到点云和边界盒
+                # 点云4维，边界盒17维（可参考dataset_class.Box.__repr__）
+                new_PC = utils.cropPC(PC, box, offset=10)  # 根据缩放和偏移后的边界盒裁切点云
 
-            self.list_of_PCs[index] = new_PC
-            self.list_of_BBs[index] = box
+                self.list_of_PCs[index] = new_PC
+                self.list_of_BBs[index] = box
         logging.info("PC preloaded!")
 
         logging.info("preloading Model..")
-        self.model_PC = [None] * len(self.list_of_tracklet_anno)
+        # self.model_PC = [None] * len(self.list_of_tracklet_anno)
         # 保存模板点云的空列表
         # 长度为数据集包含的所有序列里属于某一类的实例对象的个数
         for i in tqdm(range(len(self.list_of_tracklet_anno)), desc='annotations of a certain instance'):
             list_of_anno = self.list_of_tracklet_anno[i]
             # 读出某一实例对象的所有标注
-            PCs = []
-            BBs = []
+            # PCs = []
+            # BBs = []
             cnt = 0
             for anno in list_of_anno:
-                this_PC, this_BB = self.getBBandPC(anno)
-                PCs.append(this_PC)
-                BBs.append(this_BB)
+                # this_PC, this_BB = self.getBBandPC(anno)
+                # PCs.append(this_PC)
+                # BBs.append(this_BB)
                 anno["model_idx"] = i
-                # 在anno的dataframe里面加入model_idx属性
+                # 在anno的pd.Series里面加入model_idx属性
                 # 表示是第几个实例对象
                 anno["relative_idx"] = cnt
-                # 在anno的dataframe里面加入relative_idx属性
+                # 在anno的pd.Series里面加入relative_idx属性
                 # 表示是这个实例对象的第几个标注
                 cnt += 1
 
-            self.model_PC[i] = getModel(PCs, BBs, offset=self.offset_BB, scale=self.scale_BB)
+            # self.model_PC[i] = getModel(PCs, BBs, offset=self.offset_BB, scale=self.scale_BB)
             # 读出该对象的所有模板点云和对应真值框
         logging.info("Model preloaded!")
 
@@ -255,7 +269,9 @@ class SiameseTrain(SiameseDataset):
             # 得到服从多变量正态分布的随机采样偏移
 
         this_anno = self.list_of_anno[anno_idx]
-
+        # with open('/media/zhouxiaoyu/本地磁盘/RUNNING/data/train_data/train_data.list_of_anno[{}].json'.format(anno_idx),'r') as load_f:
+        #     this_anno = json.load(load_f)
+        #     this_anno = pd.Series(np.array(this_anno).tolist(), name='{}'.format(anno_idx), dtype=object)
         this_PC, this_BB = self.getPCandBBfromIndex(anno_idx)
         sample_BB = utils.getOffsetBB(this_BB, sample_offsets)
         # 在现有标注盒基础上得到随机偏移采样边界盒
@@ -311,11 +327,11 @@ class SiameseTrain(SiameseDataset):
 
     def getAnnotationIndex(self, index):  # 计算标注的索引
         return int(index / (self.num_candidates_perframe))
-        # 对1个实例对象生成4个候选
+        # 1个实例对象的标注对应4个随机采样搜索空间，所以取除以4的商
 
     def getSearchSpaceIndex(self, index):  # 计算搜索空间的索引
         return int(index % self.num_candidates_perframe)
-        # 对1个实例对象生成4个搜索空间
+        #1个实例对象的标注对应4个随机采样搜索空间，所以取除以4的余数
 
 
 class SiameseTest(SiameseDataset):
