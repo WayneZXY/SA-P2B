@@ -209,7 +209,41 @@ class Pointnet_Tracking(nn.Module):
                 mlp=[256, 256] 
             )
         )
-
+        # ModuleList(
+        #   (0): PointnetFPModule(
+        #     (mlp): SharedMLP(
+        #       (layer0): Conv2d(
+        #         (conv): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        #         (normlayer): BatchNorm2d(
+        #           (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        #         )
+        #         (activation): ReLU(inplace=True)
+        #       )
+        #     )
+        #   )
+        #   (1): PointnetFPModule(
+        #     (mlp): SharedMLP(
+        #       (layer0): Conv2d(
+        #         (conv): Conv2d(384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        #         (normlayer): BatchNorm2d(
+        #           (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        #         )
+        #         (activation): ReLU(inplace=True)
+        #       )
+        #     )
+        #   )
+        #   (2): PointnetFPModule(
+        #     (mlp): SharedMLP(
+        #       (layer0): Conv2d(
+        #         (conv): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        #         (normlayer): BatchNorm2d(
+        #           (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        #         )
+        #         (activation): ReLU(inplace=True)
+        #       )
+        #     )
+        #   )
+        # )
         self.cosine = nn.CosineSimilarity(dim=1)
 
         self.mlp = pt_utils.SharedMLP([4 + 256, 256, 256, 256], bn=True)
@@ -443,4 +477,13 @@ class Pointnet_Tracking(nn.Module):
             estimation_offset = self.aux_offset(aux_feature)  # 偏移估计，B * 1024 * 3
             return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1), estimation_offset
         else:
-            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs
+            search_feature_list.append(None)  # 最后一层的unknown_feats没有
+            new_feature = list(range(len(self.aux_modules)))
+            for i in range(len(self.aux_modules)):
+                if i == 0:
+                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], search_feature)
+                else:
+                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], new_feature[i - 1])
+            aux_feature = new_feature[-1].transpose(1, 2)
+            estimation_seg = self.aux_seg(aux_feature)  # 分割得分，B * 1024 * 1
+            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1)

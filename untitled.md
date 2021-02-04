@@ -73,3 +73,18 @@ open3d 可
 
 2021.1.5
 12轮, Succ=56.8, Prec=72.8, 哟西
+
+2021.1.13
+35轮, van, Succ=48.6, Prec=59.3
+26轮, cyclist, Succ=31.5, Prec=41.8
+
+2021.1.20
+car 2.0
+cyclist 5.2v 4.68t
+pedestion 6.9t 6.6v
+
+2021.1.31
+kitty_utils.py 66 67
+
+2021.2.3
+完成初稿 哟西

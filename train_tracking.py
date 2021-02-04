@@ -15,23 +15,25 @@ import torch.nn.parallel  # 多GPU情况下分布式训练
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler  # 可用来调整学习率
 import torch.utils.data
+from torch.utils.dlpack import to_dlpack
+from cupy.core.dlpack import fromDlpack
 # import torch.nn.functional as F
 # from torch.autograd import Variable
 
 from Dataset import SiameseTrain  # 训练数据集
-from pointnet2.models import Pointnet_Tracking
+from pointnet2.models import Pointnet_Tracking, Pointnet_Tracking2
 
 from mmdet.core.loss.losses import weighted_smoothl1, weighted_sigmoid_focal_loss
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batchSize', type=int, default=10, help='input batch size')
+parser.add_argument('--batchSize', type=int, default=6, help='input batch size')
 parser.add_argument('--workers', type=int, default=0, help='number of data loading workers')
 parser.add_argument('--nepoch', type=int, default=3, help='number of epochs to train for')
 parser.add_argument('--ngpu', type=int, default=1, help='# GPUs')
-parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate at t=0')
+parser.add_argument('--learning_rate', type=float, default=0.0001, help='learning rate at t=0')
 parser.add_argument('--input_feature_num', type=int, default = 0,  help='number of input point features')
-parser.add_argument('--data_dir', type=str, default = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/traning',  help='dataset path')
-parser.add_argument('--category_name', type=str, default = 'Car',  help='Object to Track (Car/Pedetrian/Van/Cyclist)')
+parser.add_argument('--data_dir', type=str, default = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/trianing',  help='dataset path')
+parser.add_argument('--category_name', type=str, default = 'Pedestrian',  help='Object to Track (Car/Pedestrian/Van/Cyclist)')
 parser.add_argument('--save_root_dir', type=str, default='results',  help='output folder')
 parser.add_argument('--model', type=str, default = '',  help='model name for training resume')
 parser.add_argument('--optimizer', type=str, default = '',  help='optimizer name for training resume')
@@ -41,7 +43,7 @@ parser.add_argument('--vis_port', type=int, default = 8097,  help='visdom port')
 opt = parser.parse_args()
 print(opt)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 vis = Visualizer(opt.env, port = opt.vis_port)
 opt.manualSeed = 1
 random.seed(opt.manualSeed)
@@ -95,7 +97,8 @@ test_dataloader = torch.utils.data.DataLoader(
 print('#Train data:', len(train_data), '#Valid data:', len(valid_data))
 
 # 2. Define model, loss and optimizer
-netR = Pointnet_Tracking(input_channels=opt.input_feature_num, use_xyz=True, test=False)
+# netR = Pointnet_Tracking(input_channels=opt.input_feature_num, use_xyz=True, test=False)
+netR = Pointnet_Tracking2(input_channels=opt.input_feature_num, use_xyz=True, test=False)
 if opt.ngpu > 1:  # 不止一张GPU时
 	netR = torch.nn.DataParallel(netR, range(opt.ngpu))
 	# torch.distributed.init_process_group(backend="nccl")
@@ -145,7 +148,7 @@ criterion_box = nn.SmoothL1Loss(reduction='none').cuda()
 optimizer = optim.Adam(netR.parameters(), lr=opt.learning_rate, betas=(0.5, 0.999), eps=1e-06)
 if opt.optimizer != '':
 	optimizer.load_state_dict(torch.load(os.path.join(save_dir, opt.optimizer)))
-scheduler = lr_scheduler.StepLR(optimizer, step_size=12, gamma=0.2)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.5)
 # 将每个参数组的学习率设置为每训练Step_Size轮，学习率就乘以Gamma这个衰减系数
 
 # 3. Training and testing
@@ -167,7 +170,7 @@ for epoch in range(opt.nepoch):
 	batch_num = 0.0
 	# batch_iou = 0.0
 	batch_true_correct = 0.0
-	for i, data in enumerate(tqdm(train_dataloader, position=0, desc='traning datas')):
+	for i, data in enumerate(tqdm(train_dataloader, position=0, desc='trianing datas')):
 		# 总数为78088 = batch size * batch个数（比如8 * 9761） = 标注数量19522 * 数据类型4种
 		# 用于训练的17个序列中Car实例共有441个，但属于每一个的标注量各不相同
 		if len(data[0]) == 1:
@@ -176,7 +179,7 @@ for epoch in range(opt.nepoch):
 		# 3.1.1 load inputs and targets
 		# data = data.cuda()
 		label_point_set, label_cla, label_reg, object_point_set, sample_seg_label, sample_seg_offset = data
-		# 一个标注对应一组采样点云、分类标签、边界盒回归信息、真值点云、采样点云逐点分割标签
+		# 一个标注对应一组采样点云、分类标签、边界盒回归信息、真值点云、采样点云逐点分割标签、采样点云逐点偏移量
 		label_cla = label_cla.cuda()
 		label_reg = label_reg.cuda()
 		object_point_set = object_point_set.cuda()
@@ -225,12 +228,17 @@ for epoch in range(opt.nepoch):
 		torch.cuda.synchronize()
 		
 		# 3.1.4 update training error
-		estimation_cla_cpu = estimation_cla.sigmoid().detach().cpu().numpy()
-		label_cla_cpu = label_cla.detach().cpu().numpy()
-		correct = float(np.sum((estimation_cla_cpu[0: len(label_point_set), :] > 0.4) == label_cla_cpu[0: len(label_point_set), :])) / 256.0
+		# estimation_cla_cpu = estimation_cla.sigmoid().detach().cpu().numpy()
+		# label_cla_cpu = label_cla.detach().cpu().numpy()
+		estimation_cla_cpu = estimation_cla.sigmoid().detach()
+		label_cla_cpu = label_cla.detach()	
+		# correct = float(np.sum((estimation_cla_cpu[0: len(label_point_set), :] > 0.4) == label_cla_cpu[0: len(label_point_set), :])) / 256.0
+		correct = torch.sum((estimation_cla_cpu[0: len(label_point_set), :] > 0.4).float() == label_cla_cpu[0: len(label_point_set), :]) / 256.0		
 		# 计算batch中正确分类的比例
-		true_correct = float(np.sum((np.float32(estimation_cla_cpu[0: len(label_point_set), :] > 0.4)
-		+ label_cla_cpu[0: len(label_point_set), :]) == 2) / (np.sum(label_cla_cpu[0: len(label_point_set), :])))
+		# true_correct = float(np.sum((np.float32(estimation_cla_cpu[0: len(label_point_set), :] > 0.4)
+		# + label_cla_cpu[0: len(label_point_set), :]) == 2) / (np.sum(label_cla_cpu[0: len(label_point_set), :])))
+		true_correct = torch.sum(((estimation_cla_cpu[0: len(label_point_set), :] > 0.4).float()
+		+ label_cla_cpu[0: len(label_point_set), :] == 2).float()) / torch.sum(label_cla_cpu[0: len(label_point_set), :])
 		# 计算batch中正样本正确分类的比例
 					
 		train_mse = train_mse + loss.data * len(label_point_set)
@@ -250,13 +258,20 @@ for epoch in range(opt.nepoch):
 				batch_aux_seg_loss / show_num, batch_aux_offset_loss / show_num))
 			print('accuracy: %f' % (batch_correct / float(batch_num)))
 			print('true accuracy: %f' % (batch_true_correct / show_num))
-			vis.plot('cla_loss', (batch_cla_loss / show_num).item())
-			vis.plot('reg_loss', (batch_reg_loss / show_num).item())
-			vis.plot('box_loss', (batch_box_loss / show_num).item())
-			vis.plot('aux_seg_loss', (batch_aux_seg_loss / show_num).item())
-			vis.plot('aux_offset_loss', (batch_aux_offset_loss / show_num).item())
-			vis.plot('accuracy', (batch_correct / float(batch_num)))
-			vis.plot('true accuracy', (batch_true_correct / show_num))
+			# vis.plot('cla_loss', (batch_cla_loss / show_num).item())
+			# vis.plot('reg_loss', (batch_reg_loss / show_num).item())
+			# vis.plot('box_loss', (batch_box_loss / show_num).item())
+			# vis.plot('aux_seg_loss', (batch_aux_seg_loss / show_num).item())
+			# vis.plot('aux_offset_loss', (batch_aux_offset_loss / show_num).item())
+			# vis.plot('accuracy', (batch_correct / float(batch_num)))
+			# vis.plot('true accuracy', (batch_true_correct / show_num))
+			vis.plot('cla_loss', fromDlpack(to_dlpack(batch_cla_loss / show_num)).item())
+			vis.plot('reg_loss', fromDlpack(to_dlpack(batch_reg_loss / show_num)).item())
+			vis.plot('box_loss', fromDlpack(to_dlpack(batch_box_loss / show_num)).item())
+			vis.plot('aux_seg_loss', fromDlpack(to_dlpack(batch_aux_seg_loss / show_num)).item())
+			vis.plot('aux_offset_loss', fromDlpack(to_dlpack(batch_aux_offset_loss / show_num)).item())
+			vis.plot('accuracy', fromDlpack(to_dlpack(batch_correct / float(batch_num))).item())
+			vis.plot('true accuracy', fromDlpack(to_dlpack(batch_true_correct / show_num)).item())		
 			batch_correct = 0.0
 			batch_cla_loss = 0.0
 			batch_reg_loss = 0.0
@@ -325,11 +340,16 @@ for epoch in range(opt.nepoch):
 		test_cla_loss = test_cla_loss + val_loss_cla.data * len(val_label_point_set)
 		test_reg_loss = test_reg_loss + val_loss_reg.data * len(val_label_point_set)
 		test_box_loss = test_box_loss + val_loss_box.data * len(val_label_point_set)
-		val_estimation_cla_cpu = val_estimation_cla.sigmoid().detach().cpu().numpy()
-		val_label_cla_cpu = val_label_point_set.detach().cpu().numpy()
-		correct = float(np.sum((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4) == val_label_cla_cpu[0: len(val_label_point_set), :])) / 256.0
-		true_correct = float(np.sum((np.float32(val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4)
-		+ val_label_cla_cpu[0: len(val_label_point_set), :]) == 2) / (np.sum(val_label_cla_cpu[0: len(val_label_point_set), :])))
+		# val_estimation_cla_cpu = val_estimation_cla.sigmoid().detach().cpu().numpy()
+		val_estimation_cla_cpu = val_estimation_cla.sigmoid().detach()
+		# val_label_cla_cpu = val_label_point_set.detach().cpu().numpy()
+		val_label_cla_cpu = val_label_cla.detach()
+		# correct = float(np.sum((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4) == val_label_cla_cpu[0: len(val_label_point_set), :])) / 256.0
+		correct = torch.sum((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4).float() == val_label_cla_cpu[0: len(val_label_point_set), :]) / 256.0
+		# true_correct = float(np.sum((np.float32(val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4)
+		# + val_label_cla_cpu[0: len(val_label_point_set), :]) == 2) / (np.sum(val_label_cla_cpu[0: len(val_label_point_set), :])))
+		true_correct = torch.sum(((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4).float()
+		+ val_label_cla_cpu[0: len(val_label_point_set), :] == 2).float()) / torch.sum(val_label_cla_cpu[0: len(val_label_point_set), :])	
 		test_correct += correct
 		test_true_correct += true_correct * len(val_label_point_set)
 	scheduler.step(epoch)  

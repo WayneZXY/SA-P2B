@@ -94,7 +94,7 @@ class _PointnetSAModuleBase(nn.Module):  # 自定义set abstraction层的基础�
 
 
 class PointnetSAModuleMSG(_PointnetSAModuleBase):  # 带多尺度聚合的点集提取层
-    r"""Pointnet set abstrction layer with multiscale grouping
+    r"""Pointnet set abstraction layer with multiscale grouping
 
     Parameters
     ----------
@@ -138,7 +138,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):  # 带多尺度聚合的点集
 
 
 class PointnetSAModule(PointnetSAModuleMSG):  # 点集提取层
-    r"""Pointnet set abstrction layer
+    r"""Pointnet set abstraction layer
 
     Parameters
     ----------
@@ -315,6 +315,61 @@ class PointnetFPModule(nn.Module):
         return new_features.squeeze(-1)
         # return new_features  # 不用mlp处理
 
+class PointnetFPModule2(nn.Module):
+    r"""Propogates the features of one set to another
+
+    Parameters
+    ----------
+    mlp : list
+        Pointnet module parameters
+    bn : bool
+        Use batchnorm
+    """
+
+    def __init__(self):
+    # def __init__(self):  # 不用mlp处理
+        ## type: (PointnetFPModule, list[int], bool) -> None
+        super(PointnetFPModule2, self).__init__()
+        # self.mlp = pt_utils.SharedMLP(mlp, bn=bn)
+
+    def forward(self, unknown, known, known_feats):
+        # type: (PointnetFPModule, torch.Tensor, torch.Tensor, torch.Tensor) -> torch.Tensor
+        r"""
+        Parameters
+        ----------
+        unknown : torch.Tensor
+            (B, n, 3) tensor of the xyz positions of the unknown features
+        known : torch.Tensor
+            (B, m, 3) tensor of the xyz positions of the known features
+        unknown_feats : torch.Tensor
+            (B, C1, n) tensor of the features to be propogated to
+        known_feats : torch.Tensor
+            (B, C2, m) tensor of features to be propogated
+
+        Returns
+        -------
+        new_features : torch.Tensor
+            (B, mlp[-1], n) tensor of the features of the unknown features
+        """
+
+        if known is not None:
+            dist, idx = pointnet2_utils.three_nn(unknown, known)  # 三点最近邻
+            dist_recip = 1.0 / (dist + 1e-8)
+            norm = torch.sum(dist_recip, dim=2, keepdim=True)
+            weight = dist_recip / norm  # 计算权重
+
+            interpolated_feats = pointnet2_utils.three_interpolate(known_feats, idx, weight)  # 插值
+            
+        else:
+            interpolated_feats = known_feats.expand(*(known_feats.size()[0: 2] + [unknown.size(1)]))
+
+        new_features = interpolated_feats
+
+        # new_features = new_features.unsqueeze(-1)
+        # new_features = self.mlp(new_features)
+
+        # return new_features.squeeze(-1)
+        return new_features  # 不用mlp处理
 
 if __name__ == "__main__":
     # from torch.autograd import Variable

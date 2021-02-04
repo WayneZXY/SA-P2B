@@ -38,8 +38,8 @@ def sigmoid_focal_loss(pred,
     target = target.type_as(pred)
     pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
     weight = (alpha * target + (1 - alpha) * (1 - target)) * weight
-    weight = weight * pt.pow(gamma)
-    loss = F.binary_cross_entropy_with_logits(pred, target, reduction='none') * weight
+    focal_weight = weight * pt.pow(gamma)
+    loss = F.binary_cross_entropy_with_logits(pred, target, reduction='none') * focal_weight
     reduction_enum = F._Reduction.get_enum(reduction)
     # none: 0, mean:1, sum: 2
     if reduction_enum == 0:
@@ -51,12 +51,12 @@ def sigmoid_focal_loss(pred,
 
 
 def weighted_sigmoid_focal_loss(pred,
-                                                        target,
-                                                        weight,
-                                                        gamma=2.0,
-                                                        alpha=0.25,
-                                                        avg_factor=None,
-                                                        num_classes=80):
+                                target,
+                                weight,
+                                gamma=2.0,
+                                alpha=0.25,
+                                avg_factor=None,
+                                num_classes=80):
     if avg_factor is None:
         avg_factor = torch.sum(weight > 0).float().item() / num_classes + 1e-6
     return sigmoid_focal_loss(

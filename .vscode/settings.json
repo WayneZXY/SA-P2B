@@ -1,0 +1,7 @@
+{
+    "editor.fontSize": 20,
+    "editor.fontFamily": "Consolas",
+    "editor.cursorWidth": 3,
+    "python.pythonPath": "/home/zhouxiaoyu/.conda/envs/zhou/bin/python",
+    "files.autoSave": "afterDelay"
+}

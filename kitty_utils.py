@@ -38,7 +38,7 @@ def getScoreHingeIoU(a, b):  # 也许对学习负样本有好处？
 
 def getOffsetBB(box, offset):
     r'''
-        根据偏移得到更多候选框
+        根据偏移得到新框
     '''
     rot_quat = Quaternion(matrix=box.rotation_matrix)
     trans = np.array(box.center)
@@ -48,6 +48,7 @@ def getOffsetBB(box, offset):
     # REMOVE PREVIOUS TRANSfORMATION FIRST
     new_box.translate(-trans)
     new_box.rotate(rot_quat.inverse)
+    # print(new_box.center)
 
     # 旋转
     if len(offset) == 3:
@@ -64,6 +65,38 @@ def getOffsetBB(box, offset):
     # APPLY PREVIOUS TRANSFORMATION
     new_box.rotate(rot_quat)
     new_box.translate(trans)
+    return new_box
+
+
+def getOffsetBB2(box, offset):
+    r'''
+        根据偏移得到新框
+    '''
+    rot_quat = Quaternion(matrix=box.rotation_matrix)
+    trans = np.array(box.center)
+
+    new_box = copy.deepcopy(box)
+
+    # REMOVE PREVIOUS TRANSfORMATION FIRST
+    new_box.translate(-trans)
+    new_box.rotate(rot_quat.inverse)
+    # print(new_box.center)
+
+    # 旋转
+    if len(offset) == 3:
+        new_box.rotate(Quaternion(axis=[0, 0, 1], angle=offset[2] * np.pi / 180))
+    elif len(offset) == 4:
+        new_box.rotate(Quaternion(axis=[0, 0, 1], angle=offset[3] * np.pi / 180))
+    if offset[0] > new_box.wlh[0]:
+        offset[0] = np.random.uniform(-1, 1)
+    if offset[1] > min(new_box.wlh[1], 2):
+        offset[1] = np.random.uniform(-1, 1)
+    # 限定一下offset的大小，超出范围的从N(-1, 1)中随机生成
+    new_box.translate(np.array([offset[0], offset[1], 0]))  # 平移
+
+    # APPLY PREVIOUS TRANSFORMATION
+    # new_box.rotate(rot_quat)
+    # new_box.translate(trans)
     return new_box
 
 
@@ -101,16 +134,20 @@ def regularizePC(PC, input_size, istrain=True):
     if np.shape(PC)[1] > 2:  # 两个以上点
         if PC.shape[0] > 3:
             PC = PC[0: 3, :]  # 只取前三维（点云坐标）
-        if PC.shape[1] != int(input_size / 2):
+        # if PC.shape[1] != int(input_size / 2):
+        if PC.shape[1] != int(input_size):
             if not istrain:
                 np.random.seed(1)
-            new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size / 2), dtype=np.int64)
+            # new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size / 2), dtype=np.int64)
+            new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size), dtype=np.int64)
             PC = PC[:, new_pts_idx]  # 如果PC.shape[1] < input_size / 2，取的点会有重复，但还是input_size / 2个
-        PC = PC.reshape((3, int(input_size / 2))).T
+        # PC = PC.reshape((3, int(input_size / 2))).T
+        PC = PC.reshape((3, int(input_size))).T
         # PC变成了一个int(input_size/2) * 3的tensor，只取input_size / 2个点
 
     else:  # 只有一个点
-        PC = np.zeros((3, int(input_size / 2))).T
+        # PC = np.zeros((3, int(input_size / 2))).T
+        PC = np.zeros((3, int(input_size))).T
 
     return torch.from_numpy(PC).float()
 
@@ -118,7 +155,7 @@ def regularizePC(PC, input_size, istrain=True):
 def regularizePCwithlabel(PC, label, reg, input_size, istrain=True):
     PC = np.array(PC.points, dtype=np.float32)
     if np.shape(PC)[1] > 2:  # 点数目三个及以上
-        if PC.shape[0] > 3:  #只要前三位坐标
+        if PC.shape[0] > 3:  # 只要前三位坐标
             PC = PC[0: 3, :]
         if PC.shape[1] != input_size:
             if not istrain:
@@ -129,13 +166,13 @@ def regularizePCwithlabel(PC, label, reg, input_size, istrain=True):
         sample_seg_label = copy.deepcopy(label)  # 用于附加任务的采样点云逐点分割标签
         PC = PC.reshape((3, input_size)).T
         sample_seg_offset = PC - reg[:3]  # 用于附加任务的采样点云逐点偏移标签
-        label = label[0: 128]
+        label = label[0: 64]
         reg = np.tile(reg, [np.size(label), 1])
         # 回归向量纵向复制size(label)次，实际是128次，拼成新的reg，大小为128*4
 
     else:
         PC = np.zeros((3, input_size)).T
-        label = np.zeros(128)
+        label = np.zeros(64)
         sample_seg_offset = PC - reg[:3]
         reg = np.tile(reg,[np.size(label),1])
         sample_seg_label = np.zeros(input_size)
@@ -225,7 +262,7 @@ def getlabelPC(PC, box, offset=0, scale=1.0):
     return new_label
 
 def cropPCwithlabel(PC, box, label, offset=0, scale=1.0):
-    '''截取点云并获得标签'''
+    '''截取点云并更新标签'''
     box_tmp = copy.deepcopy(box)
     box_tmp.wlh = box_tmp.wlh * scale
     maxi = np.max(box_tmp.corners(), axis=1) + offset
@@ -341,7 +378,7 @@ def cropAndCenterPC_label(PC,
 
     # crop around box
     new_PC, new_label = cropPCwithlabel(new_PC, new_box, new_label, offset=offset + 2.0, scale=1 * scale)
-    # 在之前较大范围点云中再根据带偏移采样框的小范围点云，作为最终的采样点云
+    # 在之前较大范围点云中再根据带偏移采样框的小范围点云，作为最终的采样点云，同时留下这些点云对应的标签
     #new_PC, new_label = cropPCwithlabel(new_PC, new_box, new_label, offset=offset+0.6, scale=1 * scale)
 
     label_reg = [new_box_gt.center[0],\

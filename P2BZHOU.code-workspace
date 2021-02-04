@@ -6,7 +6,24 @@
 	],
 	"settings": {
 		"git.ignoreLimitWarning": true,
-		"editor.fontSize": 21,
-		"files.autoSave": "afterDelay"
+		"editor.fontSize": 20,
+		"files.autoSave": "afterDelay",
+		"terminal.integrated.shell.windows": "C:\\Windows\\System32\\cmd.exe",
+		"terminal.integrated.shellArgs.windows": [
+			"/k",
+			"C:\\ProgramData\\Anaconda3\\Scripts\\activate.bat C:\\ProgramData\\Anaconda3" 
+		],
+		"terminal.integrated.cursorBlinking": true,
+		"terminal.integrated.fontFamily": "Consolas, monospace",
+		"jupyter.jupyterServerType": "local",
+		"editor.fontFamily": "Consolas",
+		"editor.cursorWidth": 3,
+		"workbench.preferredDarkColorTheme": "Night Owl",
+		"workbench.preferredLightColorTheme": "Forgive Green",
+		"workbench.iconTheme": "vscode-icons",
+		"workbench.colorTheme": "Ayu Light",
+		"workbench.sideBar.location": "right",
+		"python.pythonPath": "/home/zhouxiaoyu/.conda/envs/zhou/bin/python"
+
 	}
 }
