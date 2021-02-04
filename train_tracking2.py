@@ -366,7 +366,7 @@ for epoch in range(opt.nepoch):
 	torch.cuda.synchronize()
 	timer = time.time() - timer
 	timer = timer / len(valid_data)
-	print('==> time to learn 1 sample = %f (ms)' %(timer * 1000))
+	print('==> time to learn 1 sample = %f (ms)' % (timer * 1000))
 	# print mse
 	test_cla_loss = test_cla_loss / len(valid_data)
 	test_reg_loss = test_reg_loss / len(valid_data)
