@@ -125,8 +125,23 @@ def voxelize(PC, dim_size=[48, 108, 48]):  # 似乎没用到
     return out
 
 
-def regularizePC2(input_size, PC,):
-    return regularizePC(PC=PC, input_size=input_size)
+def regularizePC_test(PC, input_size, istrain=False):
+    PC = np.array(PC.points, dtype=np.float32)
+    if np.shape(PC)[1] > 2:  # 点数目三个及以上
+        if PC.shape[0] > 3:  # 只要前三位坐标
+            PC = PC[0: 3, :]
+        if PC.shape[1] != input_size:
+            if not istrain:
+                np.random.seed(1)
+            new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=input_size, dtype=np.int64)
+            PC = PC[:, new_pts_idx]
+        PC = PC.reshape((3, input_size)).T
+        # 回归向量纵向复制size(label)次，实际是128次，拼成新的reg，大小为128*4
+
+    else:
+        PC = np.zeros((3, input_size)).T
+
+    return torch.from_numpy(PC).float()
 
 
 def regularizePC(PC, input_size, istrain=True):
@@ -134,20 +149,20 @@ def regularizePC(PC, input_size, istrain=True):
     if np.shape(PC)[1] > 2:  # 两个以上点
         if PC.shape[0] > 3:
             PC = PC[0: 3, :]  # 只取前三维（点云坐标）
-        # if PC.shape[1] != int(input_size / 2):
-        if PC.shape[1] != int(input_size):
+        if PC.shape[1] != int(input_size / 2):
+        # if PC.shape[1] != int(input_size):
             if not istrain:
                 np.random.seed(1)
-            # new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size / 2), dtype=np.int64)
-            new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size), dtype=np.int64)
+            new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size / 2), dtype=np.int64)
+            # new_pts_idx = np.random.randint(low=0, high=PC.shape[1], size=int(input_size), dtype=np.int64)
             PC = PC[:, new_pts_idx]  # 如果PC.shape[1] < input_size / 2，取的点会有重复，但还是input_size / 2个
-        # PC = PC.reshape((3, int(input_size / 2))).T
-        PC = PC.reshape((3, int(input_size))).T
+        PC = PC.reshape((3, int(input_size / 2))).T
+        # PC = PC.reshape((3, int(input_size))).T
         # PC变成了一个int(input_size/2) * 3的tensor，只取input_size / 2个点
 
     else:  # 只有一个点
-        # PC = np.zeros((3, int(input_size / 2))).T
-        PC = np.zeros((3, int(input_size))).T
+        PC = np.zeros((3, int(input_size / 2))).T
+        # PC = np.zeros((3, int(input_size))).T
 
     return torch.from_numpy(PC).float()
 
@@ -166,13 +181,15 @@ def regularizePCwithlabel(PC, label, reg, input_size, istrain=True):
         sample_seg_label = copy.deepcopy(label)  # 用于附加任务的采样点云逐点分割标签
         PC = PC.reshape((3, input_size)).T
         sample_seg_offset = PC - reg[:3]  # 用于附加任务的采样点云逐点偏移标签
-        label = label[0: 64]
+        # label = label[0: 64]
+        label = label[0: 128]
         reg = np.tile(reg, [np.size(label), 1])
         # 回归向量纵向复制size(label)次，实际是128次，拼成新的reg，大小为128*4
 
     else:
         PC = np.zeros((3, input_size)).T
-        label = np.zeros(64)
+        # label = np.zeros(64)
+        label = np.zeros(128)
         sample_seg_offset = PC - reg[:3]
         reg = np.tile(reg,[np.size(label),1])
         sample_seg_label = np.zeros(input_size)

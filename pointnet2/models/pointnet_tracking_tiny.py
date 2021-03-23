@@ -453,5 +453,6 @@ class Pointnet_Tracking3(nn.Module):
                     new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], new_feature[i - 1])
             aux_feature = new_feature[-1].transpose(1, 2)
             estimation_seg = self.aux_seg(aux_feature)  # 分割得分，B * 1024 * 1
+            estimation_offset = self.aux_offset(aux_feature)  # 偏移估计，B * 1024 * 3
             # return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs
-            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1)
+            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1), estimation_offset

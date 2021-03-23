@@ -35,6 +35,7 @@ def estimateAccuracy(box_a, box_b, dim=3):
 
 def fromBoxToPoly(box):  # 把边界盒参数转化为几何信息
     return Polygon(tuple(box.corners()[[0, 2]].T[[0, 1, 5, 4]]))
+    # return Polygon(tuple(box.corners()[[0, 2]].T[[0, 4, 7, 3]]))
 
 
 def estimateOverlap(box_a, box_b, dim=2):  # 计算重叠交并比
@@ -53,12 +54,14 @@ def estimateOverlap(box_a, box_b, dim=2):  # 计算重叠交并比
 
         ymax = min(box_a.center[1], box_b.center[1])
         ymin = max(box_a.center[1] - box_a.wlh[2], box_b.center[1] - box_b.wlh[2])
-
+        # print(box_inter.area)
+        # print('ymax - ymin:{}'.format(ymax - ymin))
         inter_vol = box_inter.area * max(0, ymax - ymin)
         anno_vol = box_a.wlh[0] * box_a.wlh[1] * box_a.wlh[2]  # 两边界盒体积
         subm_vol = box_b.wlh[0] * box_b.wlh[1] * box_b.wlh[2]
 
         overlap = inter_vol * 1.0 / (anno_vol + subm_vol - inter_vol)
+        # print(inter_vol)
         # overlap = inter_vol / union_vol
 
     return overlap

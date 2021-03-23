@@ -82,17 +82,28 @@ def test(loader,
                         elif ("current_gt".upper() in reference_BB.upper()):
                             ref_BB = this_BB  # 参考框选为当前帧真值边界框
 
-                        candidate_PC, candidate_label, candidate_reg, _, _ = utils.cropAndCenterPC_label_test(
+                        # candidate_PC, candidate_label, candidate_reg, _, _ = utils.cropAndCenterPC_label_test(
+                        #                 this_PC,
+                        #                 ref_BB,
+                        #                 this_BB,
+                        #                 offset=dataset.offset_BB,
+                        #                 scale=dataset.scale_BB)
+
+                        candidate_PC = utils.cropAndCenterPC_label_test_time(
                                         this_PC,
                                         ref_BB,
-                                        this_BB,
                                         offset=dataset.offset_BB,
-                                        scale=dataset.scale_BB)
+                                        scale=dataset.scale_BB)                        
                         
-                        candidate_PCs, _, candidate_reg, _, _ = utils.regularizePCwithlabel(
+                        # candidate_PCs, _, candidate_reg, _, _ = utils.regularizePCwithlabel(
+                        #                 candidate_PC,
+                        #                 candidate_label,
+                        #                 candidate_reg,
+                        #                 dataset.input_size,
+                        #                 istrain=False)
+
+                        candidate_PCs = utils.regularizePC_test(
                                         candidate_PC,
-                                        candidate_label,
-                                        candidate_reg,
                                         dataset.input_size,
                                         istrain=False)
                         
@@ -161,11 +172,11 @@ def test(loader,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ngpu', type=int, default=1, help='# GPUs')
-    parser.add_argument('--save_root_dir', type=str, default='results',  help='output folder')
-    parser.add_argument('--data_dir', type=str, default = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/trianing',  help='dataset path')
-    parser.add_argument('--model', type=str, default = 'netR_6_Pedestrian.pth',  help='model name for training resume')
-    parser.add_argument('--category_name', type=str, default = 'Pedestrian',  help='Object to Track (Car/Pedestrian/Van/Cyclist)')
+    parser.add_argument('--ngpu', type=int, default=2, help='# GPUs')
+    parser.add_argument('--save_root_dir', type=str, default='model/Van_model',  help='output folder')
+    parser.add_argument('--data_dir', type=str, default = '/mnt/ssd-data/RUNNING/data/training',  help='dataset path')
+    parser.add_argument('--model', type=str, default = 'netR_35.pth',  help='model name for training resume')
+    parser.add_argument('--category_name', type=str, default = 'Van',  help='Object to Track (Car/Pedestrian/Van/Cyclist)')
     parser.add_argument('--shape_aggregation',required=False,type=str,default="firstandprevious",help='Aggregation of shapes (first/previous/firstandprevious/all)')
     parser.add_argument('--reference_BB',required=False,type=str,default="previous_result",help='previous_result/previous_gt/current_gt')
     parser.add_argument('--model_fusion',required=False,type=str,default="pointcloud",help='early or late fusion (pointcloud/latent/space)')
@@ -173,7 +184,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1, 0'
 
     logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%Y/%m/%d %H:%M:%S', \
                     filename=os.path.join(args.save_root_dir, datetime.now().strftime('%Y-%m-%d %H-%M-%S.log')), level=logging.INFO)
@@ -183,8 +194,8 @@ if __name__ == '__main__':
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
 
-    # netR = Pointnet_Tracking(input_channels=0, use_xyz=True, test=True).cuda()
-    netR = Pointnet_Tracking3(input_channels=0, use_xyz=True, test=True).cuda()
+    netR = Pointnet_Tracking(input_channels=0, use_xyz=True, test=True).cuda()
+    # netR = Pointnet_Tracking3(input_channels=0, use_xyz=True, test=True).cuda()
     if args.ngpu > 1:
         netR = torch.nn.DataParallel(netR, range(args.ngpu))
         # torch.distributed.init_process_group(backend="nccl")
@@ -196,7 +207,7 @@ if __name__ == '__main__':
     torch.cuda.synchronize()
     # Car/Pedestrian/Van/Cyclist
     dataset_Test = SiameseTest(
-            input_size=512,
+            input_size=1024,
             path=args.data_dir,
             split='Test',
             category_name=args.category_name,

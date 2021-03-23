@@ -434,6 +434,7 @@ class Pointnet_Tracking(nn.Module):
             search: B*1024*3 or B*1024*6
         """
         template_xyz_list, template_feature_list, template_feature = self.backbone_net(template, [256, 128, 64])
+        # template_xyz_list, template_feature_list, template_feature = self.backbone_net(template, [512, 256, 128])
         # 分别为B * 64 * 3，B * d1 * 64
         search_xyz_list, search_feature_list, search_feature = self.backbone_net(search, [512, 256, 128])
         # 分别为B * 128 * 3，B * d2 * 128
@@ -477,13 +478,15 @@ class Pointnet_Tracking(nn.Module):
             estimation_offset = self.aux_offset(aux_feature)  # 偏移估计，B * 1024 * 3
             return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1), estimation_offset
         else:
-            search_feature_list.append(None)  # 最后一层的unknown_feats没有
-            new_feature = list(range(len(self.aux_modules)))
-            for i in range(len(self.aux_modules)):
-                if i == 0:
-                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], search_feature)
-                else:
-                    new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], new_feature[i - 1])
-            aux_feature = new_feature[-1].transpose(1, 2)
-            estimation_seg = self.aux_seg(aux_feature)  # 分割得分，B * 1024 * 1
-            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1)
+            # search_feature_list.append(None)  # 最后一层的unknown_feats没有
+            # new_feature = list(range(len(self.aux_modules)))
+            # for i in range(len(self.aux_modules)):
+            #     if i == 0:
+            #         new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], search_feature)
+            #     else:
+            #         new_feature[i] = self.aux_modules[i](search_xyz_list[2 - i], search_xyz_list[3 - i], search_feature_list[2 - i], new_feature[i - 1])
+            # aux_feature = new_feature[-1].transpose(1, 2)
+            # estimation_seg = self.aux_seg(aux_feature)  # 分割得分，B * 1024 * 1
+            # estimation_offset = self.aux_offset(aux_feature)  # 偏移估计，B * 1024 * 3            
+            # return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs, estimation_seg.squeeze(-1), estimation_offset
+            return estimation_cla, vote_xyz, estimation_boxs.transpose(1, 2).contiguous(), center_xyzs

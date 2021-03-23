@@ -190,10 +190,10 @@ class SiameseTrain(SiameseDataset):
         self.sigma_Gaussian = sigma_Gaussian
         self.offset_BB = offset_BB
         self.scale_BB = scale_BB
-        self.saved_train_BBs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/train_data.list_of_BBs.npy'
-        self.saved_train_PCs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/train_data.list_of_PCs.npy'
-        self.saved_valid_BBs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/valid_data.list_of_BBs.npy'
-        self.saved_valid_PCs_dir = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/valid_data.list_of_PCs.npy'
+        self.saved_train_BBs_dir = '/mnt/ssd-data/RUNNING/data/train_data.list_of_BBs.npy'
+        self.saved_train_PCs_dir = '/mnt/ssd-data/RUNNING/data/train_data.list_of_PCs.npy'
+        self.saved_valid_BBs_dir = '/mnt/ssd-data/RUNNING/data/valid_data.list_of_BBs.npy'
+        self.saved_valid_PCs_dir = '/mnt/ssd-data/RUNNING/data/valid_data.list_of_PCs.npy'
         # self.saved_train_BBs_dir = "E:\RUNNING\data\\train_data.list_of_BBs.npy"
         # self.saved_train_PCs_dir = "E:\RUNNING\data\\train_data.list_of_PCs.npy"
         # self.saved_valid_BBs_dir = "E:\RUNNING\data\\valid_data.list_of_BBs.npy"
@@ -206,22 +206,22 @@ class SiameseTrain(SiameseDataset):
         self.list_of_PCs = [None] * len(self.list_of_anno)
         # self.list_of_anno从SiameseDataset继承过来
         self.list_of_BBs = [None] * len(self.list_of_anno)
-        # if np.load(self.saved_train_PCs_dir, allow_pickle=True) is not None:
-        #     if self.split == 'Train':
-        #         self.list_of_PCs = np.load(self.saved_train_PCs_dir, allow_pickle=True).tolist()
-        #         self.list_of_BBs = np.load(self.saved_train_BBs_dir, allow_pickle=True).tolist()
-        #     else:
-        #         self.list_of_PCs = np.load(self.saved_valid_PCs_dir, allow_pickle=True).tolist()
-        #         self.list_of_BBs = np.load(self.saved_valid_BBs_dir, allow_pickle=True).tolist()          
-        # else:
-        for index in tqdm(range(len(self.list_of_anno)), desc='all annotations'):
-            anno = self.list_of_anno[index]  # 获取标注
-            PC, box = self.getBBandPC(anno)  # 根据标注得到点云和边界盒
-            # 点云4维，边界盒17维（可参考dataset_class.Box.__repr__）
-            new_PC = utils.cropPC(PC, box, offset=10)  # 根据缩放和偏移后的边界盒裁切点云
+        if np.load(self.saved_train_PCs_dir, allow_pickle=True) is not None:
+            if self.split == 'Train':
+                self.list_of_PCs = np.load(self.saved_train_PCs_dir, allow_pickle=True).tolist()
+                self.list_of_BBs = np.load(self.saved_train_BBs_dir, allow_pickle=True).tolist()
+            else:
+                self.list_of_PCs = np.load(self.saved_valid_PCs_dir, allow_pickle=True).tolist()
+                self.list_of_BBs = np.load(self.saved_valid_BBs_dir, allow_pickle=True).tolist()          
+        else:
+            for index in tqdm(range(len(self.list_of_anno)), desc='all annotations'):
+                anno = self.list_of_anno[index]  # 获取标注
+                PC, box = self.getBBandPC(anno)  # 根据标注得到点云和边界盒
+                # 点云4维，边界盒17维（可参考dataset_class.Box.__repr__）
+                new_PC = utils.cropPC(PC, box, offset=10)  # 根据缩放和偏移后的边界盒裁切点云
 
-            self.list_of_PCs[index] = new_PC
-            self.list_of_BBs[index] = box
+                self.list_of_PCs[index] = new_PC
+                self.list_of_BBs[index] = box
         logging.info("PC preloaded!")
 
         logging.info("preloading Model..")

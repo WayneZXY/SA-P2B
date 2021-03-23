@@ -26,14 +26,14 @@ from pointnet2.models import Pointnet_Tracking, Pointnet_Tracking2, Pointnet_Tra
 from mmdet.core.loss.losses import weighted_smoothl1, weighted_sigmoid_focal_loss
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batchSize', type=int, default=32, help='input batch size')
+parser.add_argument('--batchSize', type=int, default=16, help='input batch size')
 parser.add_argument('--workers', type=int, default=0, help='number of data loading workers')
-parser.add_argument('--nepoch', type=int, default=37, help='number of epochs to train for')
+parser.add_argument('--nepoch', type=int, default=40, help='number of epochs to train for')
 parser.add_argument('--ngpu', type=int, default=1, help='# GPUs')
 parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate at t=0')
 parser.add_argument('--input_feature_num', type=int, default = 0,  help='number of input point features')
-parser.add_argument('--data_dir', type=str, default = '/media/zhouxiaoyu/本地磁盘/RUNNING/data/trianing',  help='dataset path')
-parser.add_argument('--category_name', type=str, default = 'Cyclist',  help='Object to Track (Car/Pedestrian/Van/Cyclist)')
+parser.add_argument('--data_dir', type=str, default = '/mnt/ssd-data/RUNNING/data/training',  help='dataset path')
+parser.add_argument('--category_name', type=str, default = 'Van',  help='Object to Track (Car/Pedestrian/Van/Cyclist)')
 parser.add_argument('--save_root_dir', type=str, default='results',  help='output folder')
 parser.add_argument('--model', type=str, default = '',  help='model name for training resume')
 parser.add_argument('--optimizer', type=str, default = '',  help='optimizer name for training resume')
@@ -64,7 +64,7 @@ logging.info('======================================================')
 
 # 1. Load data
 train_data = SiameseTrain(
-	input_size=512,
+	input_size=1024,
 	path=opt.data_dir,
 	split='Train',
 	category_name=opt.category_name,
@@ -79,7 +79,7 @@ train_dataloader = torch.utils.data.DataLoader(
     pin_memory=True)
 
 valid_data = SiameseTrain(
-    input_size=512,
+    input_size=1024,
     path=opt.data_dir,
     split='Valid',
     category_name=opt.category_name,
@@ -97,8 +97,10 @@ test_dataloader = torch.utils.data.DataLoader(
 print('#Train data:', len(train_data), '#Valid data:', len(valid_data))
 
 # 2. Define model, loss and optimizer
-netR = Pointnet_Tracking3(input_channels=opt.input_feature_num, use_xyz=True, test=False)
+# netR = Pointnet_Tracking3(input_channels=opt.input_feature_num, use_xyz=True, test=False)
 # netR = Pointnet_Tracking(input_channels=opt.input_feature_num, use_xyz=True, test=False)
+netR = Pointnet_Tracking(input_channels=opt.input_feature_num, use_xyz=True)
+
 if opt.ngpu > 1:  # 不止一张GPU时
 	netR = torch.nn.DataParallel(netR, range(opt.ngpu))
 	# torch.distributed.init_process_group(backend="nccl")
@@ -141,7 +143,7 @@ def aux_loss(pts_labels, center_targets, point_cls, point_reg):  # 附加任务�
 
 	return aux_loss_cls, aux_loss_reg
 
-criterion_cla = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1.2])).cuda()
+criterion_cla = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1.0])).cuda()
 criterion_reg = nn.SmoothL1Loss(reduction='none').cuda()
 criterion_objective = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([2.0]), reduction='none').cuda()
 criterion_box = nn.SmoothL1Loss(reduction='none').cuda()
@@ -150,7 +152,7 @@ if opt.optimizer != '':
 	optimizer.load_state_dict(torch.load(os.path.join(save_dir, opt.optimizer)))
 scheduler = lr_scheduler.StepLR(optimizer, step_size=12, gamma=0.2)
 # 将每个参数组的学习率设置为每训练Step_Size轮，学习率就乘以Gamma这个衰减系数
-first_batch = next(iter(train_dataloader))
+# first_batch = next(iter(train_dataloader))
 # 3. Training and testing
 for epoch in range(opt.nepoch):
 	# scheduler.step(epoch)
@@ -238,7 +240,7 @@ for epoch in range(opt.nepoch):
 		estimation_cla_cpu = estimation_cla.sigmoid().detach()
 		label_cla_cpu = label_cla.detach()	
 		# correct = float(np.sum((estimation_cla_cpu[0: len(label_point_set), :] > 0.4) == label_cla_cpu[0: len(label_point_set), :])) / 256.0
-		correct = torch.sum(((estimation_cla_cpu[0: len(label_point_set), :] > 0.4).float() == label_cla_cpu[0: len(label_point_set), :]).float()) / 64.0		
+		correct = torch.sum(((estimation_cla_cpu[0: len(label_point_set), :] > 0.4).float() == label_cla_cpu[0: len(label_point_set), :]).float()) / 128.0		
 		# 计算batch中正确分类的比例
 		# true_correct = float(np.sum((np.float32(estimation_cla_cpu[0: len(label_point_set), :] > 0.4)
 		# + label_cla_cpu[0: len(label_point_set), :]) == 2) / (np.sum(label_cla_cpu[0: len(label_point_set), :])))
@@ -353,7 +355,7 @@ for epoch in range(opt.nepoch):
 		# val_label_cla_cpu = val_label_point_set.detach().cpu().numpy()
 		val_label_cla_cpu = val_label_cla.detach()
 		# correct = float(np.sum((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4) == val_label_cla_cpu[0: len(val_label_point_set), :])) / 256.0
-		correct = torch.sum(((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4).float() == val_label_cla_cpu[0: len(val_label_point_set), :]).float()) / 64.0
+		correct = torch.sum(((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4).float() == val_label_cla_cpu[0: len(val_label_point_set), :]).float()) / 128.0
 		# true_correct = float(np.sum((np.float32(val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4)
 		# + val_label_cla_cpu[0: len(val_label_point_set), :]) == 2) / (np.sum(val_label_cla_cpu[0: len(val_label_point_set), :])))
 		true_correct = torch.sum(((val_estimation_cla_cpu[0: len(val_label_point_set), :] > 0.4).float()
