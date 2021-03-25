@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This repository is released for SA-P2B. Here we include our P2B model (PyTorch) and code for data preparation, training and testing on KITTI tracking dataset.
+This repository is released for SA-P2B. Here we include our SA-P2B model (PyTorch) and code for data preparation, training and testing on KITTI tracking dataset.
 
 ## Preliminary
 
