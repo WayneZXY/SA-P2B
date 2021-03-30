@@ -40,11 +40,26 @@ python test_tracking.py --data_dir=<kitti data path>
 
 Please refer to the code for setting of other optional arguments, including data split, training and testing parameters, etc.
 
+## Pretrained models
+
+```plain
+└── model
+       ├── car_model  <--- models for class Car
+       └── Van_model  <--- models for class Van
+       └── Ped_model  <--- models for class Pedstrian
+       └── Cyc_model  <--- models for class Cyclist           
+```
+
 ## Acknowledgements
 
 Thank Haozhe Qi for his implementation of [P2B](https://github.com/HaozheQi/P2B).
+
 Thank Chenhang He for his implementation of [SA-SSD](https://github.com/skyhehe123/SA-SSD).
+
 Thank Giancola for his implementation of [SC3D](https://github.com/SilvioGiancola/ShapeCompletion3DTracking).
+
 Thank Erik Wijmans for his implementation of [PointNet++](https://github.com/erikwijmans/Pointnet2_PyTorch) in PyTorch.
+
 Thank Charles R. Qi for his implementation of [Votenet](https://github.com/facebookresearch/votenet).
+
 They help and inspire this work.
