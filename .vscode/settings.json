@@ -1,9 +1,0 @@
-{
-    "editor.fontSize": 19,
-    "editor.fontFamily": "YaHei Consolas Hybrid",
-    "editor.cursorWidth": 3,
-    "python.pythonPath": "/home/zhouxiaoyu/.conda/envs/zhou/bin/python",
-    "files.autoSave": "afterDelay",
-    "terminal.integrated.fontSize": 16,
-    "jupyter.jupyterServerType": "local"
-}
